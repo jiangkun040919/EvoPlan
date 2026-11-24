@@ -44,7 +44,7 @@ class AgentContext:
         self.consecutive_failures = 0 if step.ok else self.consecutive_failures + 1
 
     def hints_text(self) -> str:
-        return "\n".join(f"- {h.exp.text} (trust {h.trust:.2f})" for h in self.hints) or "- (none)"
+        return "\n".join(f"- {h.exp.text} (trust {h.trust:.2f} ± {h.uncertainty:.2f})" for h in self.hints) or "- (none)"
 
 
 def init_beliefs(task: Task, hints: list[Retrieved], rng: random.Random) -> Beliefs:

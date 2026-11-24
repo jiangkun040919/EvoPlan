@@ -1,5 +1,6 @@
 from evoplan.memory.experience import Experience
 from evoplan.memory.store import ExperienceStore, Retrieved, similarity
-from evoplan.memory.trust import TrustConfig, trust_score
+from evoplan.memory.trust import DECAY_MODES, TrustConfig, TrustEstimate, trust_estimate, trust_score
 
-__all__ = ["Experience", "ExperienceStore", "Retrieved", "TrustConfig", "similarity", "trust_score"]
+__all__ = ["DECAY_MODES", "Experience", "ExperienceStore", "Retrieved", "TrustConfig", "TrustEstimate",
+           "similarity", "trust_estimate", "trust_score"]

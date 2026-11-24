@@ -19,7 +19,7 @@ from evoplan.agent import METHODS, Agent
 from evoplan.envs import ToyKitchen, make_stream, parse_schedule
 from evoplan.memory.reflection import LLMReflector, RuleReflector
 from evoplan.memory.store import ExperienceStore
-from evoplan.memory.trust import TrustConfig
+from evoplan.memory.trust import DECAY_MODES, TrustConfig
 from evoplan.metrics import group, summarize
 from evoplan.planning.planner import LLMPlanner, RulePlanner
 from evoplan.policy import HeuristicPolicy, LLMPolicy
@@ -29,9 +29,11 @@ COLUMNS = ["success_rate", "avg_steps", "transfer_gain", "step_saving", "negativ
            "recovery_rate", "reliability", "avg_hints", "replans", "prompt_tokens"]
 
 
-def build_agent(name: str, env: ToyKitchen, policy_kind: str, llm=None) -> Agent:
+def build_agent(name: str, env: ToyKitchen, policy_kind: str, llm=None, decay_mode: str = "evidence",
+                gamma: float = 0.99) -> Agent:
     cfg = METHODS[name]
-    store = ExperienceStore(TrustConfig(contextual=cfg.contextual)) if cfg.use_memory else None
+    trust_cfg = TrustConfig(contextual=cfg.contextual, decay_mode=decay_mode, gamma=gamma)
+    store = ExperienceStore(trust_cfg) if cfg.use_memory else None
     if policy_kind == "llm":
         return Agent(cfg, LLMPolicy(llm, env.admissible_actions), LLMPlanner(llm), LLMReflector(llm), store)
     return Agent(cfg, HeuristicPolicy(), RulePlanner(), RuleReflector(), store)
@@ -57,7 +59,7 @@ def run(args: argparse.Namespace) -> Path:
             for name in methods:
                 env = ToyKitchen(seed=seed, fault_rate=args.fault_rate, relocate_rate=args.relocate_rate,
                                  max_steps=args.max_steps)
-                agent = build_agent(name, env, args.policy, llm)
+                agent = build_agent(name, env, args.policy, llm, args.decay_mode, args.gamma)
                 for index, (phase, task) in enumerate(stream):
                     ep = agent.run(env, task, index, seed)
                     episodes[name].append(ep)
@@ -115,6 +117,9 @@ def main() -> None:
     p.add_argument("--fault-rate", type=float, default=0.08)
     p.add_argument("--relocate-rate", type=float, default=0.1)
     p.add_argument("--max-steps", type=int, default=14)
+    p.add_argument("--decay-mode", choices=DECAY_MODES, default="evidence",
+                   help="how trust changes over time: discount evidence (default), pull to 0.5, or decay to 0")
+    p.add_argument("--gamma", type=float, default=0.99, help="per-episode discount used by --decay-mode")
     p.add_argument("--price-in", type=float, default=0.0, help="price per 1k prompt tokens")
     p.add_argument("--price-out", type=float, default=0.0, help="price per 1k completion tokens")
     p.add_argument("--out", default="results")

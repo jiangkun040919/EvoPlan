@@ -42,7 +42,7 @@ class RuleReflector:
         sig = "-".join(f"{k}={v}" for k, v in sorted(key.items()))
         return Experience(id=f"{kind}:{sig}", text=text, kind=kind,
                           key=key, context=context, created=ep.index,
-                          last_validated=ep.index, sources=[ep.task.id])
+                          last_evidence=ep.index, sources=[ep.task.id])
 
 
 class LLMReflector:
@@ -68,5 +68,5 @@ class LLMReflector:
             text = m.group(1).strip()
             out.append(Experience(id=f"insight:{episode.index}:{i}", text=text, kind="insight",
                                   key={"text": text.lower()[:80]}, context=t.context(),
-                                  created=episode.index, last_validated=episode.index, sources=[t.id]))
+                                  created=episode.index, last_evidence=episode.index, sources=[t.id]))
         return out

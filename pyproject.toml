@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "evoplan"
 version = "0.1.0"
-description = "Trustworthy experience transfer and adaptive planning for agents in continual tasks"
+description = "Trustworthy experience transfer and adaptive planning for LLM agents in continual task streams"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = []

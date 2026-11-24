@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from evoplan.memory.experience import Experience
-from evoplan.memory.trust import TrustConfig, global_mean, trust_score
+from evoplan.memory.trust import TrustConfig, TrustEstimate, global_mean, trust_estimate
 
 _TOKEN = re.compile(r"[a-z0-9_=]+")
 
@@ -28,6 +28,7 @@ class Retrieved:
     exp: Experience
     sim: float
     trust: float
+    uncertainty: float
     score: float
 
 
@@ -46,20 +47,24 @@ class ExperienceStore:
     def get(self, exp_id: str) -> Experience:
         return self._items[exp_id]
 
+    def estimate(self, exp: Experience, now: int, ctx: str | None = None) -> TrustEstimate:
+        return trust_estimate(exp, now, self.trust_cfg, ctx)
+
     def trust(self, exp: Experience, now: int, ctx: str | None = None) -> float:
-        return trust_score(exp, now, self.trust_cfg, ctx)
+        return self.estimate(exp, now, ctx).mean
 
     # ----------------------------------------------------------------- writing
     def add(self, exp: Experience, ctx: str | None = None) -> Experience:
         """Insert, or merge into an existing experience with the same signature.
 
-        Re-deriving an experience in context ``ctx`` counts as a local confirmation there.
+        Creating or re-deriving an experience in context ``ctx`` counts as a local confirmation
+        there, and is written to the experience's evidence log.
         """
         sig = exp.signature()
         if sig in self._by_sig:
             target = self._items[self._by_sig[sig]]
             target.support += 1
-            target.last_validated = max(target.last_validated, exp.last_validated)
+            target.log(exp.last_evidence, ctx, "merge")
             target.sources = (target.sources + exp.sources)[-20:]
             if exp.context not in target.context:
                 target.context = f"{target.context} | {exp.context}"[-400:]
@@ -67,6 +72,7 @@ class ExperienceStore:
             target = exp
             self._items[exp.id] = exp
             self._by_sig[sig] = exp.id
+            target.log(exp.created, ctx, "create")
         if ctx is not None:
             target.local(ctx)[0] += 1
         target.quarantined = global_mean(target, self.trust_cfg) < self.trust_cfg.quarantine_below
@@ -86,14 +92,15 @@ class ExperienceStore:
             if exp_id in contra:
                 exp.contradictions += 1
                 loc[2] += 1
-                exp.last_validated = now
+                exp.log(now, ctx, "contradiction")
             elif success:
                 exp.successes += 1
                 loc[0] += 1
-                exp.last_validated = now
+                exp.log(now, ctx, "success")
             else:
                 exp.failures += 1
                 loc[1] += 1
+                exp.log(now, ctx, "failure")
             exp.quarantined = global_mean(exp, self.trust_cfg) < self.trust_cfg.quarantine_below
 
     # ----------------------------------------------------------------- reading
@@ -108,11 +115,11 @@ class ExperienceStore:
         out: list[Retrieved] = []
         for exp in self._items.values():
             sim = similarity(context, exp.context)
-            tr = self.trust(exp, now, ctx)
-            if gate and (exp.quarantined or sim < min_sim or tr < min_trust):
+            est = self.estimate(exp, now, ctx)
+            if gate and (exp.quarantined or sim < min_sim or est.mean < min_trust):
                 continue
-            score = sim * tr if use_trust else sim
-            out.append(Retrieved(exp, sim, tr, score))
+            score = sim * est.mean if use_trust else sim
+            out.append(Retrieved(exp, sim, est.mean, est.uncertainty, score))
         out.sort(key=lambda r: r.score, reverse=True)
         return _one_per_slot(out)[:k]
 
